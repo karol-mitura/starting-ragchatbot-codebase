@@ -31,6 +31,27 @@ uv sync
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 
+### Code Quality Tools
+```bash
+# Run all quality checks (formatting, linting, type checking)
+uv run python scripts/quality_check.py
+
+# Format code with black and sort imports
+uv run python scripts/format.py
+
+# Run linting checks
+uv run python scripts/lint.py
+
+# Run type checking
+uv run python scripts/typecheck.py
+
+# Individual tools
+uv run black .                    # Format code
+uv run isort .                    # Sort imports
+uv run flake8 backend/ main.py scripts/  # Lint code
+uv run mypy backend/ main.py scripts/    # Type check
+```
+
 ### Access Points
 - Web Interface: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
