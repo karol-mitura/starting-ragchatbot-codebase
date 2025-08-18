@@ -1,9 +1,9 @@
-# Frontend Changes - Code Quality Tools Implementation
+# Frontend Changes - Code Quality & Testing Implementation
 
 ## Overview
-This document outlines the changes made to implement essential code quality tools for the development workflow. The implementation focuses on Python backend code quality while maintaining compatibility with the existing frontend components.
+This document outlines the comprehensive changes made to implement essential code quality tools and enhanced testing infrastructure for the RAG system development workflow. The implementation focuses on Python backend code quality and API testing reliability while maintaining compatibility with existing frontend components.
 
-## Changes Made
+## Part 1: Code Quality Tools Implementation
 
 ### 1. Dependencies Added (`pyproject.toml`)
 - **black >= 24.0.0**: Automatic code formatting
@@ -63,11 +63,52 @@ Created four Python scripts for easy quality management:
 - Provides detailed reporting of failures
 - Suggests remediation commands
 
-### 5. Documentation Updates (`CLAUDE.md`)
-Added new "Code Quality Tools" section with:
-- Commands for running comprehensive quality checks
-- Individual tool commands
-- Usage examples for development workflow
+## Part 2: Enhanced Testing Framework
+
+### 1. pytest Configuration (pyproject.toml)
+- Added `[tool.pytest.ini_options]` section with comprehensive test configuration
+- Configured test discovery patterns and execution options
+- Added custom markers for test categorization (unit, integration, api, slow)
+- Added httpx dependency for API testing support
+
+### 2. Enhanced Test Fixtures (backend/tests/conftest.py)
+- Added new imports for FastAPI testing: `TestClient`, `patch`, `Generator`
+- Created `mock_rag_system` fixture for API testing with comprehensive mocking
+- Created `test_app` fixture that replicates the main app structure without static file mounting issues
+- Created `test_client` fixture that properly injects mocked dependencies
+- Added sample API request/response fixtures for consistent test data
+
+### 3. API Endpoint Tests (backend/tests/test_api_endpoints.py)
+- Comprehensive test suite covering all three main endpoints:
+  - `/` (root endpoint)
+  - `/api/query` (query processing)
+  - `/api/courses` (course statistics)
+- Tests cover various scenarios:
+  - Happy path testing
+  - Error handling and edge cases
+  - Request validation
+  - Response format validation
+  - CORS and header verification
+  - Unicode content handling
+  - Large response handling
+  - Session management
+- Integration tests for complete API workflows
+- Proper test categorization using pytest markers
+
+## Technical Solutions
+
+### Static File Mounting Issue Resolution
+The main FastAPI app in `backend/app.py` mounts static files from `../frontend` directory, which doesn't exist in the test environment. This was resolved by:
+
+1. Creating a separate test app (`test_app` fixture) that replicates the API endpoints without static file mounting
+2. Using dependency injection to provide mocked RAG system to the test endpoints
+3. Maintaining the same middleware configuration (CORS, TrustedHost) for realistic testing
+
+### Testing Architecture
+- **Unit Tests**: Individual component testing (existing)
+- **Integration Tests**: Component interaction testing
+- **API Tests**: Full endpoint testing with mocked dependencies
+- **Fixtures**: Shared test data and mocked dependencies for consistency
 
 ## Impact on Development Workflow
 
@@ -76,6 +117,7 @@ Added new "Code Quality Tools" section with:
 - Inconsistent import organization
 - No linting or type checking
 - Manual code style enforcement
+- Limited API testing infrastructure
 
 ### After
 - Automatic code formatting with Black
@@ -84,36 +126,44 @@ Added new "Code Quality Tools" section with:
 - Static type checking with MyPy
 - Easy-to-use development scripts
 - Integrated quality checks for CI/CD
+- Comprehensive API testing framework
 
 ## Usage Instructions
 
-### Daily Development
+### Code Quality
 ```bash
 # Format code before committing
 uv run python scripts/format.py
 
 # Run all quality checks
 uv run python scripts/quality_check.py
-```
 
-### Individual Tools
-```bash
-# Format only
+# Individual tools
 uv run black .
-
-# Check imports only
 uv run isort --check-only .
-
-# Lint only
 uv run flake8 backend/ main.py scripts/
-
-# Type check only
 uv run mypy backend/ main.py scripts/
 ```
 
+### Testing
+```bash
+# Run all tests
+uv run pytest
+
+# Run only API tests
+uv run pytest -m api
+
+# Run with verbose output
+uv run pytest -v
+
+# Run specific test file
+uv run pytest backend/tests/test_api_endpoints.py
+```
+
 ## Files Modified
-- `pyproject.toml` - Added dependencies and tool configurations
+- `pyproject.toml` - Added dependencies, tool configurations, and test settings
 - `CLAUDE.md` - Added code quality documentation
+- `backend/tests/conftest.py` - Enhanced with API testing fixtures
 - All Python files - Reformatted for consistency
 
 ## Files Created
@@ -121,12 +171,21 @@ uv run mypy backend/ main.py scripts/
 - `scripts/lint.py`
 - `scripts/typecheck.py`
 - `scripts/quality_check.py`
+- `backend/tests/test_api_endpoints.py`
 - `frontend-changes.md` (this file)
+
+## Impact on Frontend
+While no direct frontend changes were made, these enhancements provide:
+- More reliable API endpoints that the frontend depends on
+- Better error handling and validation
+- Comprehensive test coverage ensuring API stability
+- Confidence in API behavior for frontend integration
 
 ## Benefits
 1. **Consistency**: All code follows the same formatting standards
 2. **Quality**: Automated linting and type checking catch issues early
 3. **Maintainability**: Well-formatted, typed code is easier to maintain
-4. **Developer Experience**: Simple commands for quality enforcement
+4. **Developer Experience**: Simple commands for quality enforcement and testing
 5. **CI/CD Ready**: Scripts return appropriate exit codes for automation
 6. **Documentation**: Clear instructions for all team members
+7. **Reliability**: Comprehensive test coverage ensures API stability

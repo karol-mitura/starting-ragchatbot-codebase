@@ -17,6 +17,25 @@ dependencies = [
     "isort>=5.13.0",
     "flake8>=7.0.0",
     "mypy>=1.8.0",
+    "httpx>=0.24.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+]
+markers = [
+    "unit: Unit tests for individual components",
+    "integration: Integration tests for component interaction",
+    "api: API endpoint tests",
+    "slow: Tests that take a long time to run",
 ]
 
 [tool.black]
