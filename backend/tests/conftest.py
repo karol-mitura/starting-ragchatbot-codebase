@@ -1,7 +1,9 @@
 import pytest
 import sys
 import os
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
+from fastapi.testclient import TestClient
+from typing import Generator
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -151,3 +153,172 @@ def mock_tool_manager():
     mock.reset_sources.return_value = None
     
     return mock
+
+
+@pytest.fixture
+def mock_rag_system():
+    """Create a mock RAG system for API testing"""
+    mock = Mock()
+    
+    # Mock session manager
+    mock_session_manager = Mock()
+    mock_session_manager.create_session.return_value = "test-session-123"
+    mock.session_manager = mock_session_manager
+    
+    # Mock query response
+    mock.query.return_value = (
+        "This is a test response about machine learning concepts.",
+        [{"text": "Test Course - Lesson 1 content", "link": "http://example.com/lesson1"}]
+    )
+    
+    # Mock course analytics
+    mock.get_course_analytics.return_value = {
+        "total_courses": 2,
+        "course_titles": ["Test Course", "Advanced Course"]
+    }
+    
+    # Mock document loading
+    mock.add_course_folder.return_value = (2, 10)  # 2 courses, 10 chunks
+    
+    return mock
+
+
+@pytest.fixture
+def test_app():
+    """Create a test FastAPI app without static file mounting"""
+    from fastapi import FastAPI, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.middleware.trustedhost import TrustedHostMiddleware
+    from pydantic import BaseModel
+    from typing import List, Optional
+    
+    # Create test app
+    app = FastAPI(title="Course Materials RAG System Test", root_path="")
+    
+    # Add middleware
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
+    
+    # Pydantic models
+    class Source(BaseModel):
+        text: str
+        link: Optional[str] = None
+
+    class QueryRequest(BaseModel):
+        query: str
+        session_id: Optional[str] = None
+
+    class QueryResponse(BaseModel):
+        answer: str
+        sources: List[Source]
+        session_id: str
+
+    class CourseStats(BaseModel):
+        total_courses: int
+        course_titles: List[str]
+    
+    # Mock RAG system will be injected
+    rag_system = None
+    
+    @app.post("/api/query", response_model=QueryResponse)
+    async def query_documents(request: QueryRequest):
+        try:
+            session_id = request.session_id
+            if not session_id:
+                session_id = rag_system.session_manager.create_session()
+            
+            answer, sources = rag_system.query(request.query, session_id)
+            
+            formatted_sources = []
+            for source in sources:
+                if isinstance(source, dict):
+                    formatted_sources.append(Source(text=source.get("text", ""), link=source.get("link")))
+                else:
+                    formatted_sources.append(Source(text=str(source), link=None))
+            
+            return QueryResponse(
+                answer=answer,
+                sources=formatted_sources,
+                session_id=session_id
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/courses", response_model=CourseStats)
+    async def get_course_stats():
+        try:
+            analytics = rag_system.get_course_analytics()
+            return CourseStats(
+                total_courses=analytics["total_courses"],
+                course_titles=analytics["course_titles"]
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/")
+    async def root():
+        return {"message": "Course Materials RAG System API"}
+    
+    # Store reference to inject mock
+    app.state.rag_system = None
+    
+    return app
+
+
+@pytest.fixture
+def test_client(test_app, mock_rag_system) -> Generator[TestClient, None, None]:
+    """Create a test client with mocked dependencies"""
+    # Inject mock RAG system into the app
+    import sys
+    if 'app' in sys.modules:
+        # If app module is already loaded, patch it
+        with patch('app.rag_system', mock_rag_system):
+            # Also patch the module-level variable in the test app
+            import builtins
+            original_globals = {}
+            
+            # Create a test client
+            with TestClient(test_app) as client:
+                # Monkey patch rag_system into the endpoint functions
+                for route in test_app.routes:
+                    if hasattr(route, 'endpoint'):
+                        if hasattr(route.endpoint, '__globals__'):
+                            route.endpoint.__globals__['rag_system'] = mock_rag_system
+                yield client
+    else:
+        # Direct injection for test app
+        for route in test_app.routes:
+            if hasattr(route, 'endpoint'):
+                if hasattr(route.endpoint, '__globals__'):
+                    route.endpoint.__globals__['rag_system'] = mock_rag_system
+        
+        with TestClient(test_app) as client:
+            yield client
+
+
+@pytest.fixture
+def sample_api_query_request():
+    """Sample API query request data"""
+    return {
+        "query": "What is machine learning?",
+        "session_id": "test-session-123"
+    }
+
+
+@pytest.fixture
+def sample_api_query_response():
+    """Sample API query response data"""
+    return {
+        "answer": "Machine learning is a subset of artificial intelligence.",
+        "sources": [
+            {"text": "Test Course - Lesson 1 content", "link": "http://example.com/lesson1"}
+        ],
+        "session_id": "test-session-123"
+    }
