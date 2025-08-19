@@ -201,9 +201,11 @@ def mock_rag_system():
     return mock
 
 
+
+
 @pytest.fixture
-def test_app():
-    """Create a test FastAPI app without static file mounting"""
+def test_client(mock_rag_system) -> Generator[TestClient, None, None]:
+    """Create a test client with mocked dependencies"""
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -242,17 +244,14 @@ def test_app():
         total_courses: int
         course_titles: List[str]
     
-    # Mock RAG system will be injected
-    rag_system = None
-    
     @app.post("/api/query", response_model=QueryResponse)
     async def query_documents(request: QueryRequest):
         try:
             session_id = request.session_id
             if not session_id:
-                session_id = rag_system.session_manager.create_session()
+                session_id = mock_rag_system.session_manager.create_session()
             
-            answer, sources = rag_system.query(request.query, session_id)
+            answer, sources = mock_rag_system.query(request.query, session_id)
             
             formatted_sources = []
             for source in sources:
@@ -272,7 +271,7 @@ def test_app():
     @app.get("/api/courses", response_model=CourseStats)
     async def get_course_stats():
         try:
-            analytics = rag_system.get_course_analytics()
+            analytics = mock_rag_system.get_course_analytics()
             return CourseStats(
                 total_courses=analytics["total_courses"],
                 course_titles=analytics["course_titles"]
@@ -284,41 +283,8 @@ def test_app():
     async def root():
         return {"message": "Course Materials RAG System API"}
     
-    # Store reference to inject mock
-    app.state.rag_system = None
-    
-    return app
-
-
-@pytest.fixture
-def test_client(test_app, mock_rag_system) -> Generator[TestClient, None, None]:
-    """Create a test client with mocked dependencies"""
-    # Inject mock RAG system into the app
-    import sys
-    if 'app' in sys.modules:
-        # If app module is already loaded, patch it
-        with patch('app.rag_system', mock_rag_system):
-            # Also patch the module-level variable in the test app
-            import builtins
-            original_globals = {}
-            
-            # Create a test client
-            with TestClient(test_app) as client:
-                # Monkey patch rag_system into the endpoint functions
-                for route in test_app.routes:
-                    if hasattr(route, 'endpoint'):
-                        if hasattr(route.endpoint, '__globals__'):
-                            route.endpoint.__globals__['rag_system'] = mock_rag_system
-                yield client
-    else:
-        # Direct injection for test app
-        for route in test_app.routes:
-            if hasattr(route, 'endpoint'):
-                if hasattr(route.endpoint, '__globals__'):
-                    route.endpoint.__globals__['rag_system'] = mock_rag_system
-        
-        with TestClient(test_app) as client:
-            yield client
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture

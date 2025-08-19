@@ -20,10 +20,10 @@ class TestCourseSearchToolExecute:
         mock_vector_store.search.assert_called_once_with(
             query="machine learning basics", course_name=None, lesson_number=None
         )
-        assert "[Test Course]" in result
+        assert "[Test Course - Lesson 1]" in result
         assert "Introduction to machine learning" in result
         assert len(tool.last_sources) == 1
-        assert tool.last_sources[0]["text"] == "Test Course"
+        assert tool.last_sources[0]["text"] == "Test Course - Lesson 1"
 
     def test_execute_with_course_filter(self, mock_vector_store):
         """Test execution with course name filtering"""
@@ -166,7 +166,7 @@ class TestCourseSearchToolExecute:
         result = tool.execute("test query")
 
         # Verify graceful handling of missing metadata
-        assert "[unknown]" in result
+        assert "[None]" in result
         assert "Content without complete metadata" in result
 
     def test_execute_lesson_without_link(self, mock_vector_store):

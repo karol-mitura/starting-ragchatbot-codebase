@@ -10,6 +10,9 @@ from rag_system import RAGSystem
 class TestRAGSystemQueryProcessing:
     """Test RAG system query processing end-to-end"""
 
+    @patch("rag_system.ToolManager")
+    @patch("rag_system.CourseSearchTool")
+    @patch("rag_system.CourseOutlineTool")
     @patch("rag_system.VectorStore")
     @patch("rag_system.AIGenerator")
     @patch("rag_system.SessionManager")
@@ -20,12 +23,16 @@ class TestRAGSystemQueryProcessing:
         mock_session_manager,
         mock_ai_generator_class,
         mock_vector_store_class,
+        mock_outline_tool_class,
+        mock_search_tool_class,
+        mock_tool_manager_class,
     ):
         """Test query processing without session ID"""
         # Setup mocks
         mock_vector_store = mock_vector_store_class.return_value
         mock_ai_generator = mock_ai_generator_class.return_value
         mock_session_mgr = mock_session_manager.return_value
+        mock_tool_manager = mock_tool_manager_class.return_value
 
         # Mock AI response
         mock_ai_generator.generate_response.return_value = (
@@ -36,14 +43,12 @@ class TestRAGSystemQueryProcessing:
         mock_sources = [
             {"text": "ML Course - Lesson 1", "link": "http://example.com/lesson1"}
         ]
+        mock_tool_manager.get_last_sources.return_value = mock_sources
+        mock_tool_manager.reset_sources.return_value = None
 
         # Create RAG system with mock config
         config = Config()
         rag_system = RAGSystem(config)
-
-        # Mock the tool manager directly
-        rag_system.tool_manager.get_last_sources.return_value = mock_sources
-        rag_system.tool_manager.reset_sources.return_value = None
 
         # Execute query
         response, sources = rag_system.query("What is machine learning?")
@@ -70,6 +75,9 @@ class TestRAGSystemQueryProcessing:
         mock_session_mgr.get_conversation_history.assert_not_called()
         mock_session_mgr.add_exchange.assert_not_called()
 
+    @patch("rag_system.ToolManager")
+    @patch("rag_system.CourseSearchTool")
+    @patch("rag_system.CourseOutlineTool")
     @patch("rag_system.VectorStore")
     @patch("rag_system.AIGenerator")
     @patch("rag_system.SessionManager")
@@ -80,12 +88,16 @@ class TestRAGSystemQueryProcessing:
         mock_session_manager,
         mock_ai_generator_class,
         mock_vector_store_class,
+        mock_outline_tool_class,
+        mock_search_tool_class,
+        mock_tool_manager_class,
     ):
         """Test query processing with session ID and conversation history"""
         # Setup mocks
         mock_vector_store = mock_vector_store_class.return_value
         mock_ai_generator = mock_ai_generator_class.return_value
         mock_session_mgr = mock_session_manager.return_value
+        mock_tool_manager = mock_tool_manager_class.return_value
 
         # Mock conversation history
         mock_history = "User: What is AI?\nAssistant: AI is artificial intelligence."
@@ -96,14 +108,15 @@ class TestRAGSystemQueryProcessing:
             "Neural networks are a key component..."
         )
 
-        config = Config()
-        rag_system = RAGSystem(config)
-
         # Mock sources
         mock_sources = [
             {"text": "Deep Learning Course", "link": "http://example.com/dl"}
         ]
-        rag_system.tool_manager.get_last_sources.return_value = mock_sources
+        mock_tool_manager.get_last_sources.return_value = mock_sources
+        mock_tool_manager.reset_sources.return_value = None
+
+        config = Config()
+        rag_system = RAGSystem(config)
 
         # Execute query with session
         session_id = "test-session-123"
@@ -122,13 +135,16 @@ class TestRAGSystemQueryProcessing:
         # Verify conversation was updated
         mock_session_mgr.add_exchange.assert_called_once_with(
             session_id,
-            "Answer this question about course materials: Tell me about neural networks",
+            "Tell me about neural networks",
             "Neural networks are a key component...",
         )
 
         assert response == "Neural networks are a key component..."
         assert sources == mock_sources
 
+    @patch("rag_system.ToolManager")
+    @patch("rag_system.CourseSearchTool")
+    @patch("rag_system.CourseOutlineTool")
     @patch("rag_system.VectorStore")
     @patch("rag_system.AIGenerator")
     @patch("rag_system.SessionManager")
@@ -139,19 +155,24 @@ class TestRAGSystemQueryProcessing:
         mock_session_manager,
         mock_ai_generator_class,
         mock_vector_store_class,
+        mock_outline_tool_class,
+        mock_search_tool_class,
+        mock_tool_manager_class,
     ):
         """Test query processing when no sources are found"""
         # Setup mocks
         mock_ai_generator = mock_ai_generator_class.return_value
+        mock_tool_manager = mock_tool_manager_class.return_value
         mock_ai_generator.generate_response.return_value = (
             "I don't have information about that topic."
         )
 
+        # Mock empty sources
+        mock_tool_manager.get_last_sources.return_value = []
+        mock_tool_manager.reset_sources.return_value = None
+
         config = Config()
         rag_system = RAGSystem(config)
-
-        # Mock empty sources
-        rag_system.tool_manager.get_last_sources.return_value = []
 
         # Execute query
         response, sources = rag_system.query("What is quantum computing?")
@@ -160,6 +181,9 @@ class TestRAGSystemQueryProcessing:
         assert sources == []
         assert response == "I don't have information about that topic."
 
+    @patch("rag_system.ToolManager")
+    @patch("rag_system.CourseSearchTool")
+    @patch("rag_system.CourseOutlineTool")
     @patch("rag_system.VectorStore")
     @patch("rag_system.AIGenerator")
     @patch("rag_system.SessionManager")
@@ -170,18 +194,19 @@ class TestRAGSystemQueryProcessing:
         mock_session_manager,
         mock_ai_generator_class,
         mock_vector_store_class,
+        mock_outline_tool_class,
+        mock_search_tool_class,
+        mock_tool_manager_class,
     ):
         """Test query that triggers tool usage through AI generator"""
         # Setup mocks
         mock_ai_generator = mock_ai_generator_class.return_value
+        mock_tool_manager = mock_tool_manager_class.return_value
 
         # Simulate AI generator using tools and returning response
         mock_ai_generator.generate_response.return_value = (
             "Based on course materials, machine learning involves..."
         )
-
-        config = Config()
-        rag_system = RAGSystem(config)
 
         # Mock tool manager execution
         mock_sources = [
@@ -190,7 +215,21 @@ class TestRAGSystemQueryProcessing:
                 "link": "http://example.com/ml/lesson2",
             }
         ]
-        rag_system.tool_manager.get_last_sources.return_value = mock_sources
+        mock_tool_manager.get_last_sources.return_value = mock_sources
+        mock_tool_manager.reset_sources.return_value = None
+        mock_tool_manager.get_tool_definitions.return_value = [
+            {
+                "name": "search_course_content",
+                "description": "Search course materials",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                },
+            }
+        ]
+
+        config = Config()
+        rag_system = RAGSystem(config)
 
         # Execute query that should trigger tool usage
         response, sources = rag_system.query(
@@ -229,6 +268,8 @@ class TestRAGSystemCourseManagement:
         mock_session_manager,
         mock_ai_generator_class,
         mock_vector_store_class,
+        sample_course,
+        sample_course_chunks,
     ):
         """Test successful course document addition"""
         # Setup mocks
@@ -236,10 +277,9 @@ class TestRAGSystemCourseManagement:
         mock_vector_store = mock_vector_store_class.return_value
 
         # Mock course and chunks from document processor
-        from conftest import sample_course, sample_course_chunks
 
-        mock_course = sample_course()
-        mock_chunks = sample_course_chunks()
+        mock_course = sample_course
+        mock_chunks = sample_course_chunks
 
         mock_doc_processor.process_course_document.return_value = (
             mock_course,
@@ -294,7 +334,12 @@ class TestRAGSystemCourseManagement:
         assert chunk_count == 0
 
     @patch("rag_system.os.path.exists")
+    @patch("rag_system.os.path.isfile")
+    @patch("rag_system.os.path.join")
     @patch("rag_system.os.listdir")
+    @patch("rag_system.ToolManager")
+    @patch("rag_system.CourseSearchTool")
+    @patch("rag_system.CourseOutlineTool")
     @patch("rag_system.VectorStore")
     @patch("rag_system.AIGenerator")
     @patch("rag_system.SessionManager")
@@ -305,8 +350,15 @@ class TestRAGSystemCourseManagement:
         mock_session_manager,
         mock_ai_generator_class,
         mock_vector_store_class,
+        mock_outline_tool_class,
+        mock_search_tool_class,
+        mock_tool_manager_class,
         mock_listdir,
+        mock_path_join,
+        mock_path_isfile,
         mock_path_exists,
+        sample_course,
+        sample_course_chunks,
     ):
         """Test successful course folder processing"""
         # Setup mocks
@@ -316,6 +368,16 @@ class TestRAGSystemCourseManagement:
             "course2.txt",
             "readme.md",
         ]  # Only .txt should be processed
+        
+        # Mock isfile to return True for .txt files, False for others
+        def mock_isfile_side_effect(path):
+            return path.endswith('.txt')
+        mock_path_isfile.side_effect = mock_isfile_side_effect
+        
+        # Mock path join to return predictable paths
+        def mock_path_join_side_effect(folder, filename):
+            return f"{folder}/{filename}"
+        mock_path_join.side_effect = mock_path_join_side_effect
 
         mock_doc_processor = mock_doc_processor_class.return_value
         mock_vector_store = mock_vector_store_class.return_value
@@ -323,16 +385,25 @@ class TestRAGSystemCourseManagement:
         # Mock existing course titles (empty for new courses)
         mock_vector_store.get_existing_course_titles.return_value = []
 
-        # Mock document processing results
-        from conftest import sample_course, sample_course_chunks
+        # Mock document processing results - create separate course instances
+        from models import Course, Lesson
 
-        mock_course1 = sample_course()
-        mock_course1.title = "Course 1"
-        mock_chunks1 = sample_course_chunks()[:2]
+        # Create separate course objects
+        mock_course1 = Course(
+            title="Course 1",
+            instructor=sample_course.instructor,
+            course_link=sample_course.course_link,
+            lessons=sample_course.lessons,
+        )
+        mock_chunks1 = sample_course_chunks[:2]
 
-        mock_course2 = sample_course()
-        mock_course2.title = "Course 2"
-        mock_chunks2 = sample_course_chunks()[2:]
+        mock_course2 = Course(
+            title="Course 2", 
+            instructor=sample_course.instructor,
+            course_link=sample_course.course_link,
+            lessons=sample_course.lessons,
+        )
+        mock_chunks2 = sample_course_chunks[2:]
 
         mock_doc_processor.process_course_document.side_effect = [
             (mock_course1, mock_chunks1),
@@ -489,6 +560,9 @@ class TestRAGSystemIntegration:
 class TestRAGSystemConfigurationImpact:
     """Test how configuration affects RAG system behavior"""
 
+    @patch("rag_system.ToolManager")
+    @patch("rag_system.CourseSearchTool")
+    @patch("rag_system.CourseOutlineTool")
     @patch("rag_system.VectorStore")
     @patch("rag_system.AIGenerator")
     @patch("rag_system.SessionManager")
@@ -499,6 +573,9 @@ class TestRAGSystemConfigurationImpact:
         mock_session_manager,
         mock_ai_generator_class,
         mock_vector_store_class,
+        mock_outline_tool_class,
+        mock_search_tool_class,
+        mock_tool_manager_class,
     ):
         """CRITICAL TEST: Verify MAX_RESULTS=0 breaks RAG queries"""
         # Create config with MAX_RESULTS=0 (current broken configuration)
@@ -507,6 +584,7 @@ class TestRAGSystemConfigurationImpact:
 
         # Setup mocks
         mock_ai_generator = mock_ai_generator_class.return_value
+        mock_tool_manager = mock_tool_manager_class.return_value
         mock_ai_generator.generate_response.return_value = (
             "I don't have information about that."
         )
@@ -524,7 +602,8 @@ class TestRAGSystemConfigurationImpact:
         )
 
         # Mock empty sources (because MAX_RESULTS=0 prevents any search results)
-        rag_system.tool_manager.get_last_sources.return_value = []
+        mock_tool_manager.get_last_sources.return_value = []
+        mock_tool_manager.reset_sources.return_value = None
 
         # Execute query
         response, sources = rag_system.query("What is machine learning?")
@@ -535,6 +614,9 @@ class TestRAGSystemConfigurationImpact:
         # The AI will likely return a "no information" response because tools return empty results
         # This demonstrates the critical configuration issue
 
+    @patch("rag_system.ToolManager")
+    @patch("rag_system.CourseSearchTool")
+    @patch("rag_system.CourseOutlineTool")
     @patch("rag_system.VectorStore")
     @patch("rag_system.AIGenerator")
     @patch("rag_system.SessionManager")
@@ -545,6 +627,9 @@ class TestRAGSystemConfigurationImpact:
         mock_session_manager,
         mock_ai_generator_class,
         mock_vector_store_class,
+        mock_outline_tool_class,
+        mock_search_tool_class,
+        mock_tool_manager_class,
     ):
         """Test RAG query behavior with proper MAX_RESULTS configuration"""
         # Create config with proper MAX_RESULTS
@@ -553,9 +638,17 @@ class TestRAGSystemConfigurationImpact:
 
         # Setup mocks
         mock_ai_generator = mock_ai_generator_class.return_value
+        mock_tool_manager = mock_tool_manager_class.return_value
         mock_ai_generator.generate_response.return_value = (
             "Based on course materials, machine learning is..."
         )
+
+        # Mock meaningful sources (because MAX_RESULTS>0 allows search results)
+        mock_sources = [
+            {"text": "ML Course - Lesson 1", "link": "http://example.com/ml"}
+        ]
+        mock_tool_manager.get_last_sources.return_value = mock_sources
+        mock_tool_manager.reset_sources.return_value = None
 
         rag_system = RAGSystem(config)
 
@@ -565,12 +658,6 @@ class TestRAGSystemConfigurationImpact:
             config.EMBEDDING_MODEL,
             5,  # Proper configuration allows search results
         )
-
-        # Mock meaningful sources (because MAX_RESULTS>0 allows search results)
-        mock_sources = [
-            {"text": "ML Course - Lesson 1", "link": "http://example.com/ml"}
-        ]
-        rag_system.tool_manager.get_last_sources.return_value = mock_sources
 
         # Execute query
         response, sources = rag_system.query("What is machine learning?")
